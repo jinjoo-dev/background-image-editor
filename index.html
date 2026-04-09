@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Background Image Editor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ─── Top Bar ──────────────────────────────────────── -->
+<div id="topbar">
+  <h1>BG Editor</h1>
+
+  <button class="top-btn btn-secondary" id="btn-bg-upload">
+    배경 이미지 선택
+  </button>
+  <input type="file" id="bg-file-input" accept="image/*" hidden />
+
+  <div class="size-inputs">
+    <input type="number" id="canvas-w" value="1200" min="100" max="4000" />
+    <span>×</span>
+    <input type="number" id="canvas-h" value="675" min="100" max="4000" />
+    <button class="top-btn btn-secondary" id="btn-apply-size">적용</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <button class="top-btn btn-primary" id="btn-add-image">+ 이미지 추가</button>
+  <input type="file" id="img-file-input" accept="image/*" hidden />
+
+  <button class="top-btn btn-secondary" id="btn-add-text">+ 텍스트 추가</button>
+
+  <div class="sep"></div>
+
+  <button class="top-btn btn-success" id="btn-download">다운로드</button>
+</div>
+
+<!-- ─── Main ─────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Left Panel -->
+  <div id="left-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-panel="left" data-tab="recent">최근 리소스</button>
+      <button class="panel-tab" data-panel="left" data-tab="presets">프리셋</button>
+    </div>
+    <div class="panel-body">
+
+      <!-- Recent Resources Tab -->
+      <div class="tab-pane active" id="left-tab-recent">
+        <p class="section-title">최근 이미지</p>
+        <div class="resource-grid" id="recent-images-grid"></div>
+
+        <p class="section-title">텍스트 추가</p>
+        <div class="text-add-area">
+          <textarea id="text-input" placeholder="텍스트를 입력하세요"></textarea>
+          <button class="top-btn btn-primary" id="btn-add-text-from-input" style="width:100%">추가</button>
+        </div>
+
+        <p class="section-title">최근 텍스트</p>
+        <div id="recent-texts-list"></div>
+      </div>
+
+      <!-- Presets Tab -->
+      <div class="tab-pane" id="left-tab-presets">
+        <p class="section-title">프리셋 저장</p>
+        <div class="preset-save-area">
+          <input type="text" id="preset-name-input" placeholder="프리셋 이름" />
+          <button class="top-btn btn-primary" id="btn-save-preset">저장</button>
+        </div>
+
+        <p class="section-title">저장된 프리셋</p>
+        <div id="presets-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Canvas Area -->
+  <div id="canvas-area">
+    <div id="canvas-placeholder">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+        <rect x="4" y="4" width="56" height="56" rx="8" stroke="#888" stroke-width="2" stroke-dasharray="6 4"/>
+        <path d="M20 44 L28 30 L36 38 L44 26 L52 44H12z" fill="#888" opacity="0.4"/>
+        <circle cx="22" cy="22" r="5" fill="#888" opacity="0.4"/>
+      </svg>
+      <p>배경 이미지를 선택하거나<br/>캔버스 크기를 지정하세요</p>
+    </div>
+    <canvas id="editor-canvas" style="display:none"></canvas>
+
+    <div id="zoom-controls">
+      <button id="btn-zoom-out">−</button>
+      <span id="zoom-label">100%</span>
+      <button id="btn-zoom-in">+</button>
+      <button id="btn-zoom-fit" title="맞춤">⊡</button>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div id="right-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-panel="right" data-tab="props">속성</button>
+      <button class="panel-tab" data-panel="right" data-tab="layers">레이어</button>
+    </div>
+    <div class="panel-body">
+
+      <!-- Properties Tab -->
+      <div class="tab-pane active" id="right-tab-props">
+        <div id="no-selection-msg" class="no-selection">요소를 선택하면<br/>여기에 속성이 표시됩니다</div>
+        <div id="props-image" style="display:none">
+          <p class="section-title">위치</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">X</span>
+              <input type="number" id="prop-img-x" />
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">Y</span>
+              <input type="number" id="prop-img-y" />
+            </div>
+          </div>
+
+          <p class="section-title">크기</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">너비</span>
+              <input type="number" id="prop-img-w" min="1" />
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">높이</span>
+              <input type="number" id="prop-img-h" min="1" />
+            </div>
+          </div>
+
+          <p class="section-title">회전</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">각도</span>
+              <input type="range" id="prop-img-rot" min="-180" max="180" value="0" />
+              <span class="val-display" id="prop-img-rot-val">0°</span>
+            </div>
+          </div>
+
+          <p class="section-title">둥글기</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">반경</span>
+              <input type="range" id="prop-img-radius" min="0" max="50" value="0" />
+              <span class="val-display" id="prop-img-radius-val">0%</span>
+            </div>
+          </div>
+
+          <p class="section-title">투명도</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">불투명</span>
+              <input type="range" id="prop-img-opacity" min="0" max="100" value="100" />
+              <span class="val-display" id="prop-img-opacity-val">100%</span>
+            </div>
+          </div>
+
+          <div class="prop-group" style="margin-top:14px">
+            <button class="top-btn btn-secondary" id="btn-delete-element" style="width:100%">요소 삭제</button>
+          </div>
+        </div>
+
+        <div id="props-text" style="display:none">
+          <p class="section-title">내용</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <textarea id="prop-text-content" style="flex:1"></textarea>
+            </div>
+          </div>
+
+          <p class="section-title">위치</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">X</span>
+              <input type="number" id="prop-text-x" />
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">Y</span>
+              <input type="number" id="prop-text-y" />
+            </div>
+          </div>
+
+          <p class="section-title">텍스트</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">크기</span>
+              <input type="range" id="prop-text-size" min="8" max="200" value="32" />
+              <span class="val-display" id="prop-text-size-val">32px</span>
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">색상</span>
+              <input type="color" id="prop-text-color" value="#ffffff" />
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">폰트</span>
+              <select id="prop-text-font">
+                <option value="sans-serif">기본 (Sans-serif)</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Monospace</option>
+                <option value="cursive">Cursive</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Arial">Arial</option>
+                <option value="Arial Black">Arial Black</option>
+                <option value="Impact">Impact</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Tahoma">Tahoma</option>
+                <option value="Trebuchet MS">Trebuchet MS</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+              </select>
+            </div>
+            <div class="prop-row">
+              <span class="prop-label">굵기</span>
+              <select id="prop-text-weight">
+                <option value="normal">보통</option>
+                <option value="bold">굵게</option>
+                <option value="100">100</option>
+                <option value="300">300</option>
+                <option value="500">500</option>
+                <option value="700">700</option>
+                <option value="900">900</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="section-title">회전</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">각도</span>
+              <input type="range" id="prop-text-rot" min="-180" max="180" value="0" />
+              <span class="val-display" id="prop-text-rot-val">0°</span>
+            </div>
+          </div>
+
+          <p class="section-title">투명도</p>
+          <div class="prop-group">
+            <div class="prop-row">
+              <span class="prop-label">불투명</span>
+              <input type="range" id="prop-text-opacity" min="0" max="100" value="100" />
+              <span class="val-display" id="prop-text-opacity-val">100%</span>
+            </div>
+          </div>
+
+          <div class="prop-group" style="margin-top:14px">
+            <button class="top-btn btn-secondary" id="btn-delete-element-text" style="width:100%">요소 삭제</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layers Tab -->
+      <div class="tab-pane" id="right-tab-layers">
+        <div id="layers-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal (used for text input, confirmations) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">텍스트 추가</h3>
+    <input type="text" id="modal-input" placeholder="" />
+    <div class="modal-btns">
+      <button class="top-btn btn-secondary" id="modal-cancel">취소</button>
+      <button class="top-btn btn-primary" id="modal-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
