@@ -119,6 +119,16 @@ function loadBackground(file) {
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
+      // Auto-set canvas size to match image
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      state.canvasW = w;
+      state.canvasH = h;
+      state.canvas.width  = w;
+      state.canvas.height = h;
+      dom.canvasWInput().value = w;
+      dom.canvasHInput().value = h;
+
       state.bgImage = img;
       showCanvas();
       fitZoom();
