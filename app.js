@@ -3,6 +3,9 @@
    Step 1: Canvas init, background image, zoom
    Step 2: Element rendering engine (image / text)
    Step 3: Mouse interaction (select / move / resize / rotate)
+   Step 4: Properties panel
+   Step 5: Layers panel
+   Step 6: LocalStorage recent resources
    ===================================================== */
 
 // ─── Helpers ──────────────────────────────────────────
@@ -72,6 +75,8 @@ function init() {
   bindCanvasEvents();
   bindPropsPanel();
   renderAll();
+  renderRecentImages();
+  renderRecentTexts();
 }
 
 // ─── Canvas Size ──────────────────────────────────────
@@ -700,6 +705,7 @@ function addImageFromFile(file, opts = {}) {
       renderAll();
       onElementsChanged();
       updatePropsPanel();
+      saveRecentImage(src, file.name || 'image');
     };
     img.src = src;
   };
@@ -728,6 +734,7 @@ function addTextElement(content, opts = {}) {
   renderAll();
   onElementsChanged();
   updatePropsPanel();
+  saveRecentText(content);
 }
 
 // ─── Delete selected element ──────────────────────────
@@ -942,6 +949,146 @@ function _onRange(id, labelId, fmt, cb) {
     document.getElementById(labelId).textContent = fmt(v);
     cb(v);
   });
+}
+
+// ─── LocalStorage — Recent Resources ─────────────────
+const LS_IMAGES = 'bge_recentImages';
+const LS_TEXTS  = 'bge_recentTexts';
+const MAX_RECENT = 10;
+
+function lsGet(key)       { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
+function lsSet(key, val)  { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.warn('localStorage full', e); } }
+
+// ── Save ─────────────────────────────────────────────
+function saveRecentImage(src, name) {
+  let items = lsGet(LS_IMAGES);
+  // Deduplicate by src
+  items = items.filter(it => it.src !== src);
+  items.unshift({ src, name, ts: Date.now() });
+  items = items.slice(0, MAX_RECENT);
+  lsSet(LS_IMAGES, items);
+  renderRecentImages();
+}
+
+function saveRecentText(content) {
+  let items = lsGet(LS_TEXTS);
+  items = items.filter(it => it.content !== content);
+  items.unshift({ content, ts: Date.now() });
+  items = items.slice(0, MAX_RECENT);
+  lsSet(LS_TEXTS, items);
+  renderRecentTexts();
+}
+
+// ── Remove ────────────────────────────────────────────
+function removeRecentImage(idx) {
+  const items = lsGet(LS_IMAGES);
+  items.splice(idx, 1);
+  lsSet(LS_IMAGES, items);
+  renderRecentImages();
+}
+
+function removeRecentText(idx) {
+  const items = lsGet(LS_TEXTS);
+  items.splice(idx, 1);
+  lsSet(LS_TEXTS, items);
+  renderRecentTexts();
+}
+
+// ── Render Recent Images ──────────────────────────────
+function renderRecentImages() {
+  const grid  = document.getElementById('recent-images-grid');
+  const items = lsGet(LS_IMAGES);
+  grid.innerHTML = '';
+
+  if (items.length === 0) {
+    grid.innerHTML = '<p class="empty-msg" style="grid-column:1/-1">없음</p>';
+    return;
+  }
+
+  items.forEach((item, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'resource-item';
+
+    const img = document.createElement('img');
+    img.src   = item.src;
+    img.title = item.name || 'image';
+    img.addEventListener('click', () => addImageFromSrc(item.src, item.name));
+
+    const del = document.createElement('button');
+    del.className   = 'del-btn';
+    del.textContent = '✕';
+    del.title       = '삭제';
+    del.addEventListener('click', (e) => { e.stopPropagation(); removeRecentImage(idx); });
+
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    grid.appendChild(wrap);
+  });
+}
+
+// ── Render Recent Texts ───────────────────────────────
+function renderRecentTexts() {
+  const list  = document.getElementById('recent-texts-list');
+  const items = lsGet(LS_TEXTS);
+  list.innerHTML = '';
+
+  if (items.length === 0) {
+    list.innerHTML = '<p class="empty-msg">없음</p>';
+    return;
+  }
+
+  items.forEach((item, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'resource-item text-resource';
+    wrap.style.cssText = 'aspect-ratio:auto; padding:6px 8px; min-height:36px; margin-bottom:4px; display:flex; align-items:center; gap:4px; border-radius:6px;';
+
+    const label = document.createElement('span');
+    label.style.cssText = 'flex:1; font-size:12px; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    label.textContent   = item.content.split('\n')[0].slice(0, 30) || '(빈 텍스트)';
+    label.title         = item.content;
+    label.style.cursor  = 'pointer';
+    label.addEventListener('click', () => addTextElement(item.content));
+
+    const del = document.createElement('button');
+    del.className   = 'del-btn';
+    del.textContent = '✕';
+    del.title       = '삭제';
+    del.style.cssText = 'position:static; display:flex; flex-shrink:0;';
+    del.addEventListener('click', () => removeRecentText(idx));
+
+    wrap.appendChild(label);
+    wrap.appendChild(del);
+    list.appendChild(wrap);
+  });
+}
+
+// ── Add image from stored src (no File object) ────────
+function addImageFromSrc(src, name) {
+  const img = new Image();
+  img.onload = () => {
+    const maxSide = 400;
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w > maxSide || h > maxSide) {
+      const ratio = Math.min(maxSide / w, maxSide / h);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+    }
+    const el = {
+      type: 'image', id: uid(),
+      x: Math.round(state.canvasW / 2),
+      y: Math.round(state.canvasH / 2),
+      w, h, rotation: 0, borderRadius: 0, opacity: 1,
+      src, name: name || 'image', img,
+    };
+    state.elements.push(el);
+    state.selectedIndex = state.elements.length - 1;
+    showCanvas();
+    renderAll();
+    onElementsChanged();
+    updatePropsPanel();
+  };
+  img.src = src;
 }
 
 // ─── Start ────────────────────────────────────────────
