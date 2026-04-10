@@ -74,9 +74,11 @@ function init() {
   bindEvents();
   bindCanvasEvents();
   bindPropsPanel();
+  bindPresets();
   renderAll();
   renderRecentImages();
   renderRecentTexts();
+  renderPresets();
 }
 
 // ─── Canvas Size ──────────────────────────────────────
@@ -1089,6 +1091,151 @@ function addImageFromSrc(src, name) {
     updatePropsPanel();
   };
   img.src = src;
+}
+
+// ─── Presets ──────────────────────────────────────────
+const LS_PRESETS = 'bge_presets';
+
+function lsGetPresets()        { return lsGet(LS_PRESETS); }
+function lsSetPresets(arr)     { lsSet(LS_PRESETS, arr); }
+
+/** Serialize elements[] → JSON-safe (strips HTMLImageElement) */
+function serializeElements() {
+  return state.elements.map(el => {
+    if (el.type === 'image') {
+      const { img, ...rest } = el;  // drop the live Image object
+      return rest;
+    }
+    return { ...el };
+  });
+}
+
+/** Restore serialized elements → live elements[] (rebuilds img from src) */
+function deserializeElements(serialized, onDone) {
+  const result  = [];
+  let   pending = 0;
+
+  if (serialized.length === 0) { onDone(result); return; }
+
+  serialized.forEach((data, i) => {
+    result.push(null); // placeholder
+    if (data.type === 'image') {
+      pending++;
+      const img = new Image();
+      img.onload = () => {
+        result[i] = { ...data, img };
+        pending--;
+        if (pending === 0) onDone(result);
+      };
+      img.onerror = () => {
+        result[i] = { ...data, img: null };
+        pending--;
+        if (pending === 0) onDone(result);
+      };
+      img.src = data.src;
+    } else {
+      result[i] = { ...data };
+    }
+  });
+
+  // If no images at all, fire immediately
+  if (pending === 0) onDone(result);
+}
+
+// ── Save current layout as preset ────────────────────
+function savePreset(name) {
+  if (!name.trim()) return;
+  const presets = lsGetPresets();
+  // Overwrite if name already exists
+  const existing = presets.findIndex(p => p.name === name.trim());
+  const entry = { name: name.trim(), ts: Date.now(), elements: serializeElements() };
+  if (existing >= 0) presets[existing] = entry;
+  else presets.unshift(entry);
+  lsSetPresets(presets);
+  renderPresets();
+}
+
+// ── Load preset → restore elements[] ─────────────────
+function loadPreset(idx) {
+  const presets = lsGetPresets();
+  const preset  = presets[idx];
+  if (!preset) return;
+
+  deserializeElements(preset.elements, (restored) => {
+    state.elements      = restored.filter(Boolean);
+    state.selectedIndex = -1;
+    renderAll();
+    onElementsChanged();
+    updatePropsPanel();
+  });
+}
+
+// ── Delete preset ─────────────────────────────────────
+function deletePreset(idx) {
+  const presets = lsGetPresets();
+  presets.splice(idx, 1);
+  lsSetPresets(presets);
+  renderPresets();
+}
+
+// ── Render preset list ────────────────────────────────
+function renderPresets() {
+  const list    = document.getElementById('presets-list');
+  const presets = lsGetPresets();
+  list.innerHTML = '';
+
+  if (presets.length === 0) {
+    list.innerHTML = '<p class="empty-msg">저장된 프리셋이 없습니다</p>';
+    return;
+  }
+
+  presets.forEach((preset, idx) => {
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+
+    const date    = new Date(preset.ts);
+    const dateStr = `${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+    const count   = preset.elements.length;
+
+    item.innerHTML = `
+      <span class="preset-name" title="${preset.name}">${preset.name}</span>
+      <small style="color:#666;font-size:10px;flex-shrink:0">${count}개 · ${dateStr}</small>
+      <button title="불러오기" style="color:#2ecc71">▶</button>
+      <button title="삭제"     style="color:#e94560">✕</button>
+    `;
+
+    item.querySelectorAll('button')[0].addEventListener('click', (e) => {
+      e.stopPropagation();
+      loadPreset(idx);
+    });
+    item.querySelectorAll('button')[1].addEventListener('click', (e) => {
+      e.stopPropagation();
+      deletePreset(idx);
+    });
+
+    // Click on row body also loads
+    item.addEventListener('click', () => loadPreset(idx));
+
+    list.appendChild(item);
+  });
+}
+
+// ── Wire save button ──────────────────────────────────
+function bindPresets() {
+  document.getElementById('btn-save-preset').addEventListener('click', () => {
+    const input = document.getElementById('preset-name-input');
+    const name  = input.value.trim();
+    if (!name) { input.focus(); return; }
+    savePreset(name);
+    input.value = '';
+  });
+
+  document.getElementById('preset-name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const name = e.target.value.trim();
+      if (name) { savePreset(name); e.target.value = ''; }
+    }
+  });
 }
 
 // ─── Start ────────────────────────────────────────────
