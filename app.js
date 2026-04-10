@@ -6,6 +6,8 @@
    Step 4: Properties panel
    Step 5: Layers panel
    Step 6: LocalStorage recent resources
+   Step 7: Presets (save / load)
+   Step 8: PNG download
    ===================================================== */
 
 // ─── Helpers ──────────────────────────────────────────
@@ -609,6 +611,9 @@ function bindEvents() {
       setZoom(state.zoom + delta);
     }
   }, { passive: false });
+
+  // ── Download ───────────────────────────────────────
+  document.getElementById('btn-download').addEventListener('click', downloadPNG);
 
   // ── Add Image ──────────────────────────────────────
   document.getElementById('btn-add-image').addEventListener('click', () => {
@@ -1236,6 +1241,26 @@ function bindPresets() {
       if (name) { savePreset(name); e.target.value = ''; }
     }
   });
+}
+
+// ─── Download (PNG Export) ────────────────────────────
+function downloadPNG() {
+  // Temporarily deselect so handles don't appear in export
+  const prevSelected   = state.selectedIndex;
+  state.selectedIndex  = -1;
+  renderAll();
+
+  try {
+    const dataURL  = state.canvas.toDataURL('image/png');
+    const a        = document.createElement('a');
+    a.href         = dataURL;
+    a.download     = 'bg-editor-' + new Date().toISOString().slice(0,19).replace(/[T:]/g, '-') + '.png';
+    a.click();
+  } finally {
+    // Restore selection
+    state.selectedIndex = prevSelected;
+    renderAll();
+  }
 }
 
 // ─── Start ────────────────────────────────────────────
