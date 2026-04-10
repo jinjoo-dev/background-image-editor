@@ -753,7 +753,7 @@ function addImageFromFile(file, opts = {}) {
       renderAll();
       onElementsChanged();
       updatePropsPanel();
-      saveRecentImage(src, file.name || 'image');
+      saveRecentImage(img, file.name || 'image');
     };
     img.src = src;
   };
@@ -1005,14 +1005,46 @@ const LS_TEXTS  = 'bge_recentTexts';
 const MAX_RECENT = 10;
 
 function lsGet(key)       { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } }
-function lsSet(key, val)  { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.warn('localStorage full', e); } }
+function lsSet(key, val)  {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e) {
+    showToast('저장 공간이 부족합니다. 오래된 항목을 삭제해 주세요.', 'error');
+  }
+}
+
+/** Compress a loaded HTMLImageElement to a JPEG data URL for storage */
+function makeStorageSrc(imgEl, maxDim = 1200, quality = 0.82) {
+  const ratio = Math.min(maxDim / imgEl.naturalWidth, maxDim / imgEl.naturalHeight, 1);
+  const w = Math.max(1, Math.round(imgEl.naturalWidth  * ratio));
+  const h = Math.max(1, Math.round(imgEl.naturalHeight * ratio));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(imgEl, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', quality);
+}
+
+/** Show a temporary toast notification */
+function showToast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = `
+    position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+    background:${type === 'error' ? '#e94560' : '#2ecc71'};
+    color:#fff; padding:10px 22px; border-radius:8px; font-size:13px;
+    z-index:9999; pointer-events:none; white-space:nowrap;
+    box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
 
 // ── Save ─────────────────────────────────────────────
-function saveRecentImage(src, name) {
+function saveRecentImage(imgEl, name) {
+  const storedSrc = makeStorageSrc(imgEl, 800, 0.78); // compress for storage
   let items = lsGet(LS_IMAGES);
-  // Deduplicate by src
-  items = items.filter(it => it.src !== src);
-  items.unshift({ src, name, ts: Date.now() });
+  items = items.filter(it => it.name !== name);        // deduplicate by name
+  items.unshift({ src: storedSrc, name, ts: Date.now() });
   items = items.slice(0, MAX_RECENT);
   lsSet(LS_IMAGES, items);
   renderRecentImages();
@@ -1158,12 +1190,14 @@ const LS_PRESETS = 'bge_presets';
 function lsGetPresets()        { return lsGet(LS_PRESETS); }
 function lsSetPresets(arr)     { lsSet(LS_PRESETS, arr); }
 
-/** Serialize elements[] → JSON-safe (strips HTMLImageElement) */
+/** Serialize elements[] → JSON-safe, images compressed for storage */
 function serializeElements() {
   return state.elements.map(el => {
     if (el.type === 'image') {
-      const { img, ...rest } = el;  // drop the live Image object
-      return rest;
+      const { img, src, ...rest } = el;
+      // Compress using the live image object; fall back to stored src if missing
+      const storedSrc = img ? makeStorageSrc(img, 1200, 0.82) : src;
+      return { ...rest, src: storedSrc };
     }
     return { ...el };
   });
@@ -1212,6 +1246,7 @@ function savePreset(name) {
   else presets.unshift(entry);
   lsSetPresets(presets);
   renderPresets();
+  showToast(`"${entry.name}" 프리셋이 저장되었습니다`, 'info');
 }
 
 // ── Load preset → restore elements[] ─────────────────
