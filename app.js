@@ -499,21 +499,46 @@ function onMouseMove(e) {
     const ly = vx * Math.sin(rad) + vy * Math.cos(rad);
 
     if (el.type === 'image') {
-      const newW = Math.max(10, Math.abs(lx));
-      const newH = Math.max(10, Math.abs(ly));
+      let newW = Math.max(10, Math.abs(lx));
+      let newH = Math.max(10, Math.abs(ly));
+      let centerX, centerY;
+
+      if (e.shiftKey) {
+        // Uniform scale: use the dimension that grew more
+        const origW  = drag.elSnap.w;
+        const origH  = drag.elSnap.h;
+        const scale  = Math.max(Math.abs(lx) / origW, Math.abs(ly) / origH);
+        newW = Math.max(10, scale * origW);
+        newH = Math.max(10, scale * origH);
+
+        // Recompute where the dragged corner actually lands in canvas space
+        const signX    = lx >= 0 ? 1 : -1;
+        const signY    = ly >= 0 ? 1 : -1;
+        const fwdRad   = (drag.elSnap.rotation || 0) * Math.PI / 180;
+        const draggedX = fp.x + (signX * newW) * Math.cos(fwdRad) - (signY * newH) * Math.sin(fwdRad);
+        const draggedY = fp.y + (signX * newW) * Math.sin(fwdRad) + (signY * newH) * Math.cos(fwdRad);
+        centerX = (fp.x + draggedX) / 2;
+        centerY = (fp.y + draggedY) / 2;
+      } else {
+        centerX = (fp.x + pt.x) / 2;
+        centerY = (fp.y + pt.y) / 2;
+      }
+
       el.w = newW;
       el.h = newH;
+      el.x = centerX;
+      el.y = centerY;
     } else {
       // For text resize: adjust font size proportionally
       const snap   = drag.elSnap;
       const snapB  = getTextBoundsOf(snap);
       const scale  = Math.max(0.1, Math.abs(lx) / (snapB.w / 2 || 1));
       el.fontSize  = Math.max(8, Math.round(snap.fontSize * scale));
-    }
 
-    // New center = midpoint of fixed corner and current mouse
-    el.x = (fp.x + pt.x) / 2;
-    el.y = (fp.y + pt.y) / 2;
+      // New center = midpoint of fixed corner and current mouse
+      el.x = (fp.x + pt.x) / 2;
+      el.y = (fp.y + pt.y) / 2;
+    }
   }
 
   renderAll();
