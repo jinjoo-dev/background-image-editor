@@ -655,6 +655,9 @@ function bindEvents() {
       document.querySelectorAll(`[id^="${prefix}"]`).forEach(pane => {
         pane.classList.toggle('active', pane.id === prefix + tabName);
       });
+
+      // Refresh layer list when layers tab becomes visible
+      if (panel === 'right' && tabName === 'layers') updateLayersPanel();
     });
   });
 }
@@ -742,8 +745,81 @@ function onElementsChanged() {
   updateLayersPanel();
 }
 
-// Stubs — implemented in later steps
-function updateLayersPanel() {}
+// ─── Layers Panel ─────────────────────────────────────
+function updateLayersPanel() {
+  const list = document.getElementById('layers-list');
+  list.innerHTML = '';
+
+  if (state.elements.length === 0) {
+    list.innerHTML = '<p class="empty-msg">요소가 없습니다</p>';
+    return;
+  }
+
+  // Render top → bottom (reverse of array order so topmost is first)
+  [...state.elements].reverse().forEach((el, revIdx) => {
+    const i    = state.elements.length - 1 - revIdx; // actual index
+    const item = document.createElement('div');
+    item.className = 'layer-item' + (i === state.selectedIndex ? ' selected' : '');
+    item.dataset.index = i;
+
+    const icon = el.type === 'image' ? '🖼' : '✏️';
+    const name = el.type === 'image'
+      ? (el.name || 'image').replace(/\.[^.]+$/, '')
+      : (el.content || '').split('\n')[0].slice(0, 18) || 'text';
+
+    item.innerHTML = `
+      <span class="layer-icon">${icon}</span>
+      <span class="layer-name" title="${name}">${name}</span>
+      <button class="layer-btn" data-action="up"    title="위로">↑</button>
+      <button class="layer-btn" data-action="down"  title="아래로">↓</button>
+      <button class="layer-btn" data-action="del"   title="삭제">✕</button>
+    `;
+
+    // Click on the row → select
+    item.addEventListener('click', (e) => {
+      if (e.target.dataset.action) return; // handled by button
+      state.selectedIndex = i;
+      renderAll();
+      updatePropsPanel();
+      updateLayersPanel();
+    });
+
+    // Buttons
+    item.querySelector('[data-action="up"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      moveLayer(i, 1);   // move toward end of array = visually up
+    });
+    item.querySelector('[data-action="down"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      moveLayer(i, -1);  // move toward start = visually down
+    });
+    item.querySelector('[data-action="del"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.selectedIndex = i;
+      deleteSelected();
+    });
+
+    list.appendChild(item);
+  });
+}
+
+/** Move element at index i by delta (+1 = up, -1 = down) in render order */
+function moveLayer(i, delta) {
+  const els  = state.elements;
+  const newI = i + delta;
+  if (newI < 0 || newI >= els.length) return;
+
+  // Swap
+  [els[i], els[newI]] = [els[newI], els[i]];
+
+  // Keep selection tracking
+  if (state.selectedIndex === i)    state.selectedIndex = newI;
+  else if (state.selectedIndex === newI) state.selectedIndex = i;
+
+  renderAll();
+  updateLayersPanel();
+  updatePropsPanel();
+}
 
 // ─── Properties Panel ─────────────────────────────────
 function updatePropsPanel() {
