@@ -584,10 +584,10 @@ function getTextBoundsOf(el) {
 
 // ─── Event Binding ────────────────────────────────────
 function bindEvents() {
-  // Background upload button
-  document.getElementById('btn-bg-upload').addEventListener('click', () => {
-    dom.bgFileInput().click();
-  });
+  // Background upload button (topbar + placeholder)
+  const triggerBgUpload = () => dom.bgFileInput().click();
+  document.getElementById('btn-bg-upload').addEventListener('click', triggerBgUpload);
+  document.getElementById('btn-bg-upload-placeholder').addEventListener('click', triggerBgUpload);
   dom.bgFileInput().addEventListener('change', (e) => {
     if (e.target.files[0]) {
       loadBackground(e.target.files[0]);

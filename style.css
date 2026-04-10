@@ -296,6 +296,10 @@ body {
   pointer-events: none;
   user-select: none;
 }
+#canvas-placeholder button {
+  pointer-events: all;
+  cursor: pointer;
+}
 #canvas-placeholder svg { margin-bottom: 12px; opacity: 0.4; }
 #canvas-placeholder p { font-size: 14px; }
 
