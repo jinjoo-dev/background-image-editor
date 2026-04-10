@@ -443,6 +443,12 @@ function onMouseDown(e) {
     if (hitTestElement(elements[i], pt)) { found = i; break; }
   }
 
+  // If we're leaving a text element, sync its current content to recent list
+  if (state.selectedIndex >= 0 && state.selectedIndex !== found) {
+    const prev = state.elements[state.selectedIndex];
+    if (prev && prev.type === 'text') syncRecentText(prev);
+  }
+
   state.selectedIndex = found;
   updatePropsPanel();
   updateLayersPanel();
@@ -766,7 +772,7 @@ function addTextElement(content, opts = {}) {
   renderAll();
   onElementsChanged();
   updatePropsPanel();
-  saveRecentText(content);
+  saveRecentText(content, el.id);
 }
 
 // ─── Delete selected element ──────────────────────────
@@ -1002,10 +1008,23 @@ function saveRecentImage(src, name) {
   renderRecentImages();
 }
 
-function saveRecentText(content) {
+/** Called when a text element is deselected — updates its recent entry in-place */
+function syncRecentText(el) {
+  const items = lsGet(LS_TEXTS);
+  const idx   = items.findIndex(it => it.id === el.id);
+  if (idx < 0) return; // not in recent list, nothing to sync
+  if (items[idx].content === el.content) return; // no change
+  items[idx].content = el.content;
+  items[idx].ts      = Date.now();
+  lsSet(LS_TEXTS, items);
+  renderRecentTexts();
+}
+
+function saveRecentText(content, elementId) {
   let items = lsGet(LS_TEXTS);
-  items = items.filter(it => it.content !== content);
-  items.unshift({ content, ts: Date.now() });
+  // Deduplicate: remove existing entry with same id or same content
+  items = items.filter(it => it.id !== elementId && it.content !== content);
+  items.unshift({ content, id: elementId || null, ts: Date.now() });
   items = items.slice(0, MAX_RECENT);
   lsSet(LS_TEXTS, items);
   renderRecentTexts();
