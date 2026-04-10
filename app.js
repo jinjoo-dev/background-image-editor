@@ -70,6 +70,7 @@ function init() {
   applyCanvasSize(state.canvasW, state.canvasH);
   bindEvents();
   bindCanvasEvents();
+  bindPropsPanel();
   renderAll();
 }
 
@@ -695,6 +696,7 @@ function addImageFromFile(file, opts = {}) {
       showCanvas();
       renderAll();
       onElementsChanged();
+      updatePropsPanel();
     };
     img.src = src;
   };
@@ -722,6 +724,7 @@ function addTextElement(content, opts = {}) {
   showCanvas();
   renderAll();
   onElementsChanged();
+  updatePropsPanel();
 }
 
 // ─── Delete selected element ──────────────────────────
@@ -741,7 +744,129 @@ function onElementsChanged() {
 
 // Stubs — implemented in later steps
 function updateLayersPanel() {}
-function updatePropsPanel() {}
+
+// ─── Properties Panel ─────────────────────────────────
+function updatePropsPanel() {
+  const { selectedIndex, elements } = state;
+  const noSel   = document.getElementById('no-selection-msg');
+  const imgPanel = document.getElementById('props-image');
+  const txtPanel = document.getElementById('props-text');
+
+  if (selectedIndex < 0 || selectedIndex >= elements.length) {
+    noSel.style.display    = '';
+    imgPanel.style.display = 'none';
+    txtPanel.style.display = 'none';
+    return;
+  }
+
+  const el = elements[selectedIndex];
+  noSel.style.display = 'none';
+
+  if (el.type === 'image') {
+    imgPanel.style.display = '';
+    txtPanel.style.display = 'none';
+    _setVal('prop-img-x',       Math.round(el.x));
+    _setVal('prop-img-y',       Math.round(el.y));
+    _setVal('prop-img-w',       Math.round(el.w));
+    _setVal('prop-img-h',       Math.round(el.h));
+    _setRange('prop-img-rot',    el.rotation   || 0,  'prop-img-rot-val',    v => v + '°');
+    _setRange('prop-img-radius', el.borderRadius || 0, 'prop-img-radius-val', v => v + '%');
+    _setRange('prop-img-opacity', Math.round((el.opacity ?? 1) * 100), 'prop-img-opacity-val', v => v + '%');
+  } else {
+    imgPanel.style.display = 'none';
+    txtPanel.style.display = '';
+    _setTextareaVal('prop-text-content', el.content || '');
+    _setVal('prop-text-x',    Math.round(el.x));
+    _setVal('prop-text-y',    Math.round(el.y));
+    _setRange('prop-text-size',    el.fontSize  || 32,  'prop-text-size-val',    v => v + 'px');
+    _setRange('prop-text-rot',     el.rotation  || 0,   'prop-text-rot-val',     v => v + '°');
+    _setRange('prop-text-opacity', Math.round((el.opacity ?? 1) * 100), 'prop-text-opacity-val', v => v + '%');
+    document.getElementById('prop-text-color').value  = el.color      || '#ffffff';
+    document.getElementById('prop-text-font').value   = el.fontFamily || 'sans-serif';
+    document.getElementById('prop-text-weight').value = el.fontWeight || 'bold';
+  }
+
+  // Switch right panel to Props tab
+  _activateRightTab('props');
+}
+
+function _setVal(id, v)              { document.getElementById(id).value = v; }
+function _setTextareaVal(id, v)      { document.getElementById(id).value = v; }
+function _setRange(id, v, labelId, fmt) {
+  document.getElementById(id).value           = v;
+  document.getElementById(labelId).textContent = fmt(v);
+}
+function _activateRightTab(tabName) {
+  document.querySelectorAll('.panel-tab[data-panel="right"]').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  });
+  document.querySelectorAll('[id^="right-tab-"]').forEach(p => {
+    p.classList.toggle('active', p.id === 'right-tab-' + tabName);
+  });
+}
+
+// ─── Wire up property input → element ─────────────────
+function bindPropsPanel() {
+  // ── Image props ───────────────────────────────────────
+  _onNum('prop-img-x', v => { _elProp('x', v); });
+  _onNum('prop-img-y', v => { _elProp('y', v); });
+  _onNum('prop-img-w', v => { _elProp('w', Math.max(1, v)); });
+  _onNum('prop-img-h', v => { _elProp('h', Math.max(1, v)); });
+
+  _onRange('prop-img-rot',    'prop-img-rot-val',    v => v + '°',  v => { _elProp('rotation', v); });
+  _onRange('prop-img-radius', 'prop-img-radius-val', v => v + '%',  v => { _elProp('borderRadius', v); });
+  _onRange('prop-img-opacity', 'prop-img-opacity-val', v => v + '%', v => { _elProp('opacity', v / 100); });
+
+  document.getElementById('btn-delete-element').addEventListener('click', deleteSelected);
+
+  // ── Text props ────────────────────────────────────────
+  document.getElementById('prop-text-content').addEventListener('input', (e) => {
+    _elProp('content', e.target.value);
+  });
+  _onNum('prop-text-x', v => { _elProp('x', v); });
+  _onNum('prop-text-y', v => { _elProp('y', v); });
+
+  _onRange('prop-text-size',    'prop-text-size-val',    v => v + 'px', v => { _elProp('fontSize', v); });
+  _onRange('prop-text-rot',     'prop-text-rot-val',     v => v + '°',  v => { _elProp('rotation', v); });
+  _onRange('prop-text-opacity', 'prop-text-opacity-val', v => v + '%',  v => { _elProp('opacity', v / 100); });
+
+  document.getElementById('prop-text-color').addEventListener('input', (e) => {
+    _elProp('color', e.target.value);
+  });
+  document.getElementById('prop-text-font').addEventListener('change', (e) => {
+    _elProp('fontFamily', e.target.value);
+  });
+  document.getElementById('prop-text-weight').addEventListener('change', (e) => {
+    _elProp('fontWeight', e.target.value);
+  });
+
+  document.getElementById('btn-delete-element-text').addEventListener('click', deleteSelected);
+}
+
+/** Set a property on the currently selected element and re-render */
+function _elProp(key, val) {
+  const el = state.elements[state.selectedIndex];
+  if (!el) return;
+  el[key] = val;
+  renderAll();
+}
+
+/** Bind number input → callback */
+function _onNum(id, cb) {
+  document.getElementById(id).addEventListener('change', (e) => {
+    const v = parseFloat(e.target.value);
+    if (!isNaN(v)) cb(v);
+  });
+}
+
+/** Bind range input → label + callback */
+function _onRange(id, labelId, fmt, cb) {
+  document.getElementById(id).addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    document.getElementById(labelId).textContent = fmt(v);
+    cb(v);
+  });
+}
 
 // ─── Start ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
